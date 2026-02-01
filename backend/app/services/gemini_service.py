@@ -27,11 +27,13 @@ model = genai.GenerativeModel(
         "max_output_tokens": 8192,
         "response_mime_type": "application/json",
     },
-    system_instruction="""You are a historical storytelling AI.
-Generate content ONLY from provided historical context.
-Do not invent facts, people, or events.
-You must output VALID JSON.
-Structure your response as:
+    system_instruction="""You are a versatile storytelling AI capable of generating both historical and creative fictional content.
+You can adapt your approach based on the task:
+- For historical stories: Use accurate facts and historical knowledge
+- For creative stories: Use imagination and creativity to craft engaging narratives
+- For hybrid stories: Blend historical facts with creative storytelling
+
+You must ALWAYS output VALID JSON in this structure:
 {
   "title": "Story Title",
   "era": "Era Name",
@@ -40,6 +42,8 @@ Structure your response as:
   "story_content": "Full story text...",
   "moral": "Moral of the story"
 }
+
+Follow the specific instructions provided in each prompt carefully.
 """
 )
 
@@ -73,18 +77,22 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         4. Write in {style} style, making it captivating and entertaining
         5. Include world-building details appropriate to the {era} setting
         6. Create a narrative arc with beginning, middle, and end
-        7. Conclude with a meaningful moral or lesson from the story
+        7. Create a detailed timeline with at least 4-5 key story moments/events
+        8. Conclude with a meaningful moral or lesson from the story
         
         Required Output Format (MUST be valid JSON):
         {{
           "title": "An engaging title for the story",
           "era": "{era}",
           "timeline": [
-            {{"date": "Story timeline point", "event": "What happened in the story"}},
-            {{"date": "Story timeline point", "event": "What happened in the story"}}
+            {{"date": "Beginning", "event": "Opening scene description"}},
+            {{"date": "Early Adventure", "event": "First major event"}},
+            {{"date": "Mid Journey", "event": "Conflict or challenge"}},
+            {{"date": "Climax", "event": "Peak moment of the story"}},
+            {{"date": "Resolution", "event": "How the story concludes"}}
           ],
-          "main_events_summary": ["Key plot point 1", "Key plot point 2", "Key plot point 3"],
-          "story_content": "Full creative narrative written in {style} style. Make it imaginative, engaging, and entertaining.",
+          "main_events_summary": ["Key plot point 1", "Key plot point 2", "Key plot point 3", "Key plot point 4"],
+          "story_content": "Full creative narrative written in {style} style. Make it imaginative, engaging, and entertaining with vivid descriptions.",
           "moral": "The key lesson or message of this story"
         }}
         

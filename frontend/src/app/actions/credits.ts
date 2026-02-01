@@ -2,12 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
-
-// Credit costs configuration
-export const CREDIT_COSTS = {
-    STORY_GENERATION: 1,  // Cost per story generation
-    SIGNUP_BONUS: 10,     // Initial credits on signup
-};
+import { CREDIT_COSTS } from "./constants";
 
 /**
  * Get user's current credit balance

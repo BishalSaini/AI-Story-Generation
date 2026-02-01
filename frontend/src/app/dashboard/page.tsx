@@ -4,7 +4,8 @@ import { useUser } from '@clerk/nextjs';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, Send, History, Image as ImageIcon } from 'lucide-react';
-import { generateAndSaveStory } from '../actions/story-stateless';
+import { generateAndSaveStory } from '../actions/story';
+import { getUserStories, getStoryById } from '../actions/history';
 import CreditDisplay from '@/components/CreditDisplay';
 import { initializeUserCredits } from '../actions/credits';
 
@@ -17,19 +18,55 @@ export default function Dashboard() {
     const [style, setStyle] = useState("Narrative");
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<any>(null);
+    const [storyHistory, setStoryHistory] = useState<any[]>([]);
 
     // Initialize user credits on first login
     useEffect(() => {
         if (user?.id && user?.primaryEmailAddress?.emailAddress) {
             initializeUserCredits(user.id, user.primaryEmailAddress.emailAddress);
+            loadStoryHistory();
         }
     }, [user]);
+
+    const loadStoryHistory = async () => {
+        if (!user?.id) return;
+        const stories = await getUserStories(user.id);
+        setStoryHistory(stories);
+    };
+
+    const loadStoryFromHistory = async (storyId: string) => {
+        const story = await getStoryById(storyId);
+        if (story) {
+            setResult({
+                story: {
+                    ...story,
+                    story_content: story.content,
+                    timeline: story.timeline as any[],
+                    main_events_summary: story.events as any[]
+                },
+                images: story.images
+            });
+        }
+    };
 
     const handleGenerate = async () => {
         if (!topic) return;
         setLoading(true);
         setResult(null);
         try {
+            // Auto-detect if Contemporary era with Historical type - likely needs Creative type
+            let finalStoryType = storyType;
+            if (era === "Contemporary" && storyType === "Historical") {
+                // Suggest creative for contemporary topics
+                const creativeKeywords = ['magical', 'fantasy', 'adventure', 'kids', 'dragon', 'princess', 'space', 'alien', 'robot'];
+                const hasCreativeKeyword = creativeKeywords.some(keyword => 
+                    topic.toLowerCase().includes(keyword)
+                );
+                if (hasCreativeKeyword) {
+                    finalStoryType = "Creative";
+                }
+            }
+            
             // Using Server Action instead of direct API call
             const response = await generateAndSaveStory(
                 user?.id || "guest",
@@ -37,7 +74,7 @@ export default function Dashboard() {
                 topic,
                 era,
                 style,
-                storyType
+                finalStoryType
             );
 
             if (response.success && response.story) {
@@ -52,6 +89,9 @@ export default function Dashboard() {
                     },
                     images: response.story.images
                 });
+
+                // Reload history
+                await loadStoryHistory();
 
                 // Refresh credits display
                 if (typeof window !== 'undefined' && (window as any).refreshCredits) {
@@ -78,7 +118,24 @@ export default function Dashboard() {
                     <span>History Log</span>
                 </div>
                 <div className="space-y-2">
-                    <div className="text-sm text-gray-500">No previous stories.</div>
+                    {storyHistory.length === 0 ? (
+                        <div className="text-sm text-gray-500">No previous stories.</div>
+                    ) : (
+                        storyHistory.map((story) => (
+                            <button
+                                key={story.id}
+                                onClick={() => loadStoryFromHistory(story.id)}
+                                className="w-full text-left p-3 rounded-lg hover:bg-white/5 transition border border-white/5 hover:border-orange-500/30"
+                            >
+                                <div className="text-sm font-semibold text-white truncate">
+                                    {story.title}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    {story.era} • {new Date(story.createdAt).toLocaleDateString()}
+                                </div>
+                            </button>
+                        ))
+                    )}
                 </div>
             </aside>
 
@@ -166,13 +223,19 @@ export default function Dashboard() {
                                 className="w-full mt-6 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-xl transition flex justify-center items-center gap-2"
                             >
                                 {loading ? <Loader2 className="animate-spin" /> : <Send size={18} />}
-                                {loading ? "Generating Story & Visuals..." : "Generate History"}
+                                {loading ? "Generating Story & Visuals..." : "Generate Story"}
                             </button>
                         </div>
 
                         {/* Guidelines */}
                         <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-sm text-blue-200">
-                            <strong>Note:</strong> Face generation for historical figures is disabled for safety. Expect symbolic and architectural imagery.
+                            <strong>💡 Quick Tips:</strong>
+                            <ul className="mt-2 space-y-1 ml-4 list-disc">
+                                <li>For <strong>real historical events</strong>: Use "Historical" story type</li>
+                                <li>For <strong>imaginative/fictional stories</strong>: Use "Creative" story type</li>
+                                <li>Contemporary + magical/fantasy topics work best with "Creative" type</li>
+                                <li><strong>Each story costs 10 credits</strong></li>
+                            </ul>
                         </div>
                     </div>
 

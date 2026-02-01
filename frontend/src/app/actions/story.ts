@@ -2,6 +2,8 @@
 
 import prisma from "@/lib/db";
 import axios from "axios";
+import { hasEnoughCredits, deductCredits } from "./credits";
+import { CREDIT_COSTS } from "./constants";
 
 export async function generateAndSaveStory(
     userId: string,
@@ -12,7 +14,16 @@ export async function generateAndSaveStory(
     storyType: string = "Historical"
 ) {
     try {
-        // 1. Ensure User Exists
+        // 1. Check if user has enough credits
+        const hasCredits = await hasEnoughCredits(userId, CREDIT_COSTS.STORY_GENERATION);
+        if (!hasCredits) {
+            return {
+                success: false,
+                error: `Insufficient credits. You need ${CREDIT_COSTS.STORY_GENERATION} credit(s) to generate a story.`
+            };
+        }
+
+        // 2. Ensure User Exists
         let user = await prisma.user.findUnique({
             where: { clerkId: userId },
         });
@@ -26,7 +37,7 @@ export async function generateAndSaveStory(
             });
         }
 
-        // 2. Call FastAPI Backend for Logic
+        // 3. Call FastAPI Backend for Logic
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
         const response = await axios.post(`${apiUrl}/generate`, {
             clerkId: userId,
@@ -37,7 +48,7 @@ export async function generateAndSaveStory(
             storyType,
         });
 
-        // 3. Save to Database (Prisma Frontend)
+        // 4. Save to Database (Prisma Frontend)
         const { story, images } = response.data;
 
         if (!story) throw new Error("No story returned from AI");
@@ -66,7 +77,20 @@ export async function generateAndSaveStory(
             }
         });
 
-        // 4. Return to component
+        // 5. Deduct credits after successful generation
+        const deductResult = await deductCredits(
+            userId,
+            CREDIT_COSTS.STORY_GENERATION,
+            "STORY_GENERATION",
+            `Generated story: ${story.title}`,
+            savedStory.id
+        );
+
+        if (!deductResult.success) {
+            console.error("Credit deduction failed:", deductResult.error);
+        }
+
+        // 6. Return to component
         return { success: true, story: savedStory };
 
     } catch (error: any) {

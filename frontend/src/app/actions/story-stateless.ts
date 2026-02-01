@@ -1,7 +1,8 @@
 "use server";
 
 import axios from "axios";
-import { hasEnoughCredits, deductCredits, CREDIT_COSTS } from "./credits";
+import { hasEnoughCredits, deductCredits } from "./credits";
+import { CREDIT_COSTS } from "./constants";
 
 // STATELESS VERSION - No database required
 export async function generateAndSaveStory(
