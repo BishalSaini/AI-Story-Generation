@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  clerkId            String              @unique
+  email              String              @unique
+  credits            Int                 @default(10) // Initial credits on signup
+  createdAt          DateTime            @default(now())
+  stories            Story[]
+  creditTransactions CreditTransaction[]
+}
+
+model Story {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  topic       String
+  era         String
+  style       String
+  title       String
+  content     String
+  moral       String?
+  timeline    Json?
+  events      Json?
+  images      Image[]
+  createdAt   DateTime @default(now())
+  promptLogs  PromptLog[]
+}
+
+model Image {
+  id        String   @id @default(cuid())
+  storyId   String
+  story     Story    @relation(fields: [storyId], references: [id])
+  url       String
+  prompt    String
+  category  String?
+  createdAt DateTime @default(now())
+}
+
+model PromptLog {
+  id             String   @id @default(cuid())
+  storyId        String?
+  story          Story?   @relation(fields: [storyId], references: [id])
+  requestType    String
+  promptUsed     String
+  optionsUsed    Json?
+  outputGenerated String?
+  latencyMs      Int?
+  createdAt      DateTime @default(now())
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Int      // Positive for additions, negative for deductions
+  type        String   // "SIGNUP_BONUS", "STORY_GENERATION", "ADMIN_CREDIT", etc.
+  description String?
+  storyId     String?  // Link to story if related to story generation
+  balanceAfter Int     // User's credit balance after this transaction
+  createdAt   DateTime @default(now())
+}
