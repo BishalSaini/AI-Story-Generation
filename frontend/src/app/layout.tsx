@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VishwaHistory AI",
+  title: "StoryNest AI",
   description: "Indian History Storytelling System",
 };
 

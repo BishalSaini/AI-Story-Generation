@@ -11,15 +11,19 @@ export async function generateAndSaveStory(
     topic: string,
     era: string,
     style: string,
-    storyType: string = "Historical"
+    storyType: string = "Historical",
+    withImages: boolean = true,
+    language: string = "English"
 ) {
     try {
         // 1. Check if user has enough credits
-        const hasCredits = await hasEnoughCredits(userId, CREDIT_COSTS.STORY_GENERATION);
+        const cost = withImages ? CREDIT_COSTS.STORY_WITH_IMAGES : CREDIT_COSTS.STORY_ONLY;
+
+        const hasCredits = await hasEnoughCredits(userId, cost);
         if (!hasCredits) {
             return {
                 success: false,
-                error: `Insufficient credits. You need ${CREDIT_COSTS.STORY_GENERATION} credit(s) to generate a story.`
+                error: `Insufficient credits. You need ${cost} credit(s) to generate a story.`
             };
         }
 
@@ -46,6 +50,8 @@ export async function generateAndSaveStory(
             era,
             style,
             storyType,
+            withImages,
+            language,
         });
 
         // 4. Save to Database (Prisma Frontend)
@@ -80,7 +86,7 @@ export async function generateAndSaveStory(
         // 5. Deduct credits after successful generation
         const deductResult = await deductCredits(
             userId,
-            CREDIT_COSTS.STORY_GENERATION,
+            cost,
             "STORY_GENERATION",
             `Generated story: ${story.title}`,
             savedStory.id
@@ -99,6 +105,59 @@ export async function generateAndSaveStory(
             return { success: false, error: error.response.data.detail || error.message };
         }
         console.error("Story Generation Error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function generateAudio(text: string, storyType: string) {
+    try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+        const response = await axios.post(`${apiUrl}/generate-audio`, {
+            text,
+            storyType
+        });
+
+        return {
+            success: true,
+            audioUrl: response.data.audioUrl,
+            alignment: response.data.alignment
+        };
+    } catch (error: any) {
+        console.error("Audio Generation Error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function extractCharacters(storyText: string) {
+    try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+        const response = await axios.post(`${apiUrl}/extract-characters`, {
+            text: storyText
+        });
+        return { success: true, characters: response.data.characters };
+    } catch (error: any) {
+        console.error("Character Extraction Error:", error);
+        return { success: false, characters: [] };
+    }
+}
+
+export async function messageCharacter(
+    storyContext: string,
+    characterName: string,
+    history: any[],
+    message: string
+) {
+    try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+        const response = await axios.post(`${apiUrl}/chat`, {
+            story_context: storyContext,
+            character_name: characterName,
+            history,
+            message
+        });
+        return { success: true, response: response.data.response };
+    } catch (error: any) {
+        console.error("Chat Error:", error);
         return { success: false, error: error.message };
     }
 }

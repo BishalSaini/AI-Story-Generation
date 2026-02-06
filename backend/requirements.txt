@@ -6,3 +6,4 @@ pydantic
 pydantic-settings
 openai
 httpx
+edge-tts

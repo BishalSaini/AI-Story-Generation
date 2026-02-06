@@ -18,20 +18,22 @@ model User {
 }
 
 model Story {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  topic       String
-  era         String
-  style       String
-  title       String
-  content     String
-  moral       String?
-  timeline    Json?
-  events      Json?
-  images      Image[]
-  createdAt   DateTime @default(now())
-  promptLogs  PromptLog[]
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id])
+  topic          String
+  era            String
+  style          String
+  title          String
+  content        String
+  moral          String?
+  timeline       Json?
+  events         Json?
+  audioUrl       String?  // Cached audio URL
+  audioAlignment Json?    // Cached audio alignment data
+  images         Image[]
+  createdAt      DateTime @default(now())
+  promptLogs     PromptLog[]
 }
 
 model Image {
