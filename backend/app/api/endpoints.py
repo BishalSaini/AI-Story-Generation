@@ -86,10 +86,11 @@ from app.services.audio_service import generate_story_audio
 class AudioRequest(BaseModel):
     text: str
     storyType: str = "Historical"
+    language: str = ""
 
 @router.post("/generate-audio")
 async def create_audio(request: AudioRequest):
-    result = await generate_story_audio(request.text, request.storyType)
+    result = await generate_story_audio(request.text, request.storyType, request.language)
     if not result:
         raise HTTPException(status_code=500, detail="Audio generation failed")
     

@@ -2,10 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Send, History, Image as ImageIcon, Play, Pause, Square, Volume2, MessageCircle, X, User, Plus, LayoutDashboard, ChevronLeft, ChevronRight, Feather } from 'lucide-react';
+import { Loader2, Send, History, Image as ImageIcon, Play, Pause, Square, Volume2, MessageCircle, X, User, Plus, LayoutDashboard, ChevronLeft, ChevronRight, Feather, Trash2 } from 'lucide-react';
 import { generateAndSaveStory, extractCharacters, messageCharacter } from '../actions/story';
+import { togglePublishStory } from '../actions/social';
+
 import { generateAndSaveAudio, getStoredAudio } from '../actions/audio';
-import { getUserStories, getStoryById } from '../actions/history';
+import { getUserStories, getStoryById, deleteStory } from '../actions/history';
 import CreditDisplay from '@/components/CreditDisplay';
 import ModernLoader from '@/components/ModernLoader';
 import { initializeUserCredits } from '../actions/credits';
@@ -28,6 +30,7 @@ export default function Dashboard() {
     const [style, setStyle] = useState("Narrative");
     const [language, setLanguage] = useState("English");
     const [withImages, setWithImages] = useState(true);
+    const [characterName, setCharacterName] = useState("");
 
     // Audio State
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -38,6 +41,10 @@ export default function Dashboard() {
     const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
     const [highlightedSentenceIndex, setHighlightedSentenceIndex] = useState(-1);
     const [audioLoadingStep, setAudioLoadingStep] = useState(0);
+
+    // Social State
+    const [isPublic, setIsPublic] = useState(false);
+
 
     // Refs
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -87,6 +94,7 @@ export default function Dashboard() {
         setViewMode('create');
         setResult(null);
         setTopic("");
+        setCharacterName("");
         setShowChatPanel(false);
     };
 
@@ -106,7 +114,10 @@ export default function Dashboard() {
             });
 
             // Load cached audio if available
+            if (story.isPublic !== undefined) setIsPublic(story.isPublic);
+
             if (story.audioUrl && story.audioAlignment) {
+
                 const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || "http://localhost:8000";
                 const fullUrl = `${backendUrl}${story.audioUrl}`;
                 setAudioUrl(fullUrl);
@@ -169,7 +180,10 @@ export default function Dashboard() {
             const response = await generateAndSaveStory(
                 user?.id || "guest",
                 user?.primaryEmailAddress?.emailAddress || "guest@example.com",
-                topic,
+                // For Creative stories with character name, prepend it to the topic
+                finalStoryType === "Creative" && characterName.trim()
+                    ? `${characterName.trim()}: ${topic}`
+                    : topic,
                 era,
                 style,
                 finalStoryType,
@@ -193,7 +207,9 @@ export default function Dashboard() {
                 }
                 setViewMode('view');
                 setShowChatPanel(false);
+                setIsPublic(false); // New stories are private by default
             } else {
+
                 alert("Generation failed: " + response.error);
             }
 
@@ -207,7 +223,23 @@ export default function Dashboard() {
     };
 
 
+    const handlePublish = async () => {
+        if (!result?.story?.id) return;
+
+        // Optimistic UI update could be done here, but let's wait for server
+        const res = await togglePublishStory(result.story.id);
+
+        if (res.success && typeof res.isPublic === 'boolean') { // Ensure isPublic is boolean
+            setIsPublic(res.isPublic);
+            // Refresh history to update any badges
+            await loadStoryHistory();
+        } else {
+            alert("Failed to update publish status");
+        }
+    };
+
     const preprocessAlignment = (rawAlignment: any[], text: string): any[] => {
+
         console.log("=== PREPROCESSING ALIGNMENT ===");
         console.log("Raw alignment length:", rawAlignment.length);
         console.log("Text length:", text.length);
@@ -379,7 +411,8 @@ export default function Dashboard() {
             const res = await generateAndSaveAudio(
                 result.story.id,
                 result.story.story_content,
-                result.story.storyType || result.story.style || "Historical"
+                result.story.storyType || result.story.style || "Historical",
+                language
             );
 
             if (res.success && res.audioUrl) {
@@ -476,6 +509,29 @@ export default function Dashboard() {
         setIsChatLoading(false);
     };
 
+    const handleDeleteStory = async (storyId: string, storyTitle: string, e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent loading the story when clicking delete
+
+        if (!confirm(`Are you sure you want to delete "${storyTitle}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        if (!user?.id) return;
+
+        const res = await deleteStory(storyId, user.id);
+        if (res.success) {
+            // If the deleted story is currently being viewed, clear the view
+            if (result?.story?.id === storyId) {
+                setResult(null);
+                setViewMode('create');
+            }
+            // Refresh the story history
+            await loadStoryHistory();
+        } else {
+            alert("Failed to delete story: " + res.error);
+        }
+    };
+
     const renderFormattedText = (text: string) => {
         if (!text) return null;
         return text.split('\n').map((line, i) => {
@@ -517,7 +573,7 @@ export default function Dashboard() {
                     <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">StoryNest</span>
                 </div>
 
-                <div className="mb-6">
+                <div className="mb-6 space-y-2">
                     <button
                         onClick={handleCreateNew}
                         className="w-full py-3 px-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-lg text-white font-semibold flex items-center justify-center gap-2 shadow-lg transition-all"
@@ -525,6 +581,13 @@ export default function Dashboard() {
                         <Plus size={18} />
                         New Story
                     </button>
+                    <Link
+                        href="/community"
+                        className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-gray-300 hover:text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                    >
+                        <LayoutDashboard size={18} /> {/* Using LayoutDashboard as icon for community/feed for now or Globe if imported */}
+                        Community Feed
+                    </Link>
                 </div>
 
                 <div className="flex items-center gap-2 mb-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
@@ -537,22 +600,34 @@ export default function Dashboard() {
                         <div className="text-sm text-gray-500 text-center py-4">No stories yet.</div>
                     ) : (
                         storyHistory.map((story) => (
-                            <button
+                            <div
                                 key={story.id}
-                                onClick={() => loadStoryFromHistory(story.id)}
-                                className={`w-full text-left p-3 rounded-lg transition-all border
+                                className={`relative group w-full rounded-lg transition-all border
                                     ${result?.story.title === story.title
                                         ? 'bg-white/10 border-orange-500/50 text-white'
                                         : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400 hover:text-white'
                                     }`}
                             >
-                                <div className="text-sm font-semibold truncate leading-tight">
-                                    {story.title}
-                                </div>
-                                <div className="text-[10px] text-gray-500 mt-1">
-                                    {story.era} • {new Date(story.createdAt).toLocaleDateString()}
-                                </div>
-                            </button>
+                                <button
+                                    onClick={() => loadStoryFromHistory(story.id)}
+                                    className="w-full text-left p-3"
+                                >
+                                    <div className="text-sm font-semibold truncate leading-tight pr-6">
+                                        {story.title}
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 mt-1">
+                                        {story.era} • {new Date(story.createdAt).toLocaleDateString()}
+                                        {(story as any).isPublic && <span className="ml-2 text-green-400 text-[10px] border border-green-500/30 px-1 rounded">PUBLIC</span>}
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={(e) => handleDeleteStory(story.id, story.title, e)}
+                                    className="absolute top-2 right-2 p-1.5 rounded-md bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+                                    title="Delete story"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         ))
                     )}
                 </div>
@@ -582,6 +657,17 @@ export default function Dashboard() {
                     </div>
                     {viewMode === 'view' && (
                         <div className="flex items-center gap-2">
+                            <button
+                                onClick={handlePublish}
+                                className={`px-4 py-2 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium
+                                    ${isPublic
+                                        ? 'bg-green-500/20 border-green-500 text-green-400 hover:bg-green-500/30'
+                                        : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                                    }`}
+                            >
+                                <LayoutDashboard size={18} /> {/* Reusing icon, ideally Globe */}
+                                {isPublic ? "Published" : "Publish"}
+                            </button>
                             <button
                                 onClick={() => setShowChatPanel(!showChatPanel)}
                                 className={`p-2 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium
@@ -793,7 +879,7 @@ export default function Dashboard() {
                                                     <Loader2 size={16} className="animate-spin" /> Identifying characters...
                                                 </div>
                                             ) : (
-                                                <div className="w-full space-y-2">
+                                                <div className="w-full space-y-2 max-h-[450px] overflow-y-auto custom-scrollbar pr-2">
                                                     {chatCharacters.map((char, i) => (
                                                         <button
                                                             key={i}
@@ -962,10 +1048,27 @@ export default function Dashboard() {
                                                 <option value="English">English</option>
                                                 <option value="Hindi">Hindi</option>
                                                 <option value="Marathi">Marathi</option>
-                                                <option value="Sanskrit">Sanskrit</option>
                                             </select>
                                         </div>
                                     </div>
+
+                                    {/* Custom Character Name (Only for Creative stories) */}
+                                    {storyType === "Creative" && (
+                                        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-4">
+                                            <label className="block text-sm font-medium text-orange-400 mb-2 flex items-center gap-2">
+                                                <User size={16} />
+                                                Character Name (Optional)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={characterName}
+                                                onChange={(e) => setCharacterName(e.target.value)}
+                                                placeholder="e.g. Captain Zara, Alex the Explorer, Maya"
+                                                className="w-full bg-black/40 border border-orange-500/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-2">Give your protagonist a name to make the story more personal!</p>
+                                        </div>
+                                    )}
 
                                     {/* Image Toggle */}
                                     <div className="flex items-center justify-between bg-black/20 p-4 rounded-xl border border-white/5">

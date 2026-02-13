@@ -109,12 +109,13 @@ export async function generateAndSaveStory(
     }
 }
 
-export async function generateAudio(text: string, storyType: string) {
+export async function generateAudio(text: string, storyType: string, language: string = "") {
     try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
         const response = await axios.post(`${apiUrl}/generate-audio`, {
             text,
-            storyType
+            storyType,
+            language
         });
 
         return {

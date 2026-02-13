@@ -3,6 +3,7 @@ import edge_tts
 import os
 import uuid
 import asyncio
+import re
 from app.core.config import settings
 import logging
 
@@ -11,21 +12,84 @@ logger = logging.getLogger(__name__)
 AUDIO_DIR = "static/audio"
 os.makedirs(AUDIO_DIR, exist_ok=True)
 
-# Voice mapping for different styles/eras
-VOICE_MAPPING = {
-    "Historical": "en-GB-SoniaNeural",  # British Female, formal
-    "Creative": "en-US-GuyNeural",      # US Male, energetic
-    "Mythology": "en-IN-NeerjaNeural",  # Indian accent (often good for mystical) or en-GB
-    "TimeTravel": "en-US-AriaNeural",   
-    "SciFi": "en-US-DavisNeural",       # Synthetic/Tech vibe
-    "Mystery": "en-US-GuyNeural",       # Serious/Narration
-    "Default": "en-US-ChristopherNeural" 
+# Language-specific voice mappings
+# Each language has a default voice and optionally style-based voices
+LANGUAGE_VOICE_MAP = {
+    "Hindi": {
+        "Default": "hi-IN-SwaraNeural",       # Female Hindi
+        "Male": "hi-IN-MadhurNeural",          # Male Hindi
+        "Historical": "hi-IN-MadhurNeural",
+        "Creative": "hi-IN-SwaraNeural",
+        "Mythology": "hi-IN-SwaraNeural",
+        "Mystery": "hi-IN-MadhurNeural",
+    },
+    "Marathi": {
+        "Default": "mr-IN-AarohiNeural",       # Female Marathi
+        "Male": "mr-IN-ManoharNeural",          # Male Marathi
+        "Historical": "mr-IN-ManoharNeural",
+        "Creative": "mr-IN-AarohiNeural",
+        "Mythology": "mr-IN-AarohiNeural",
+        "Mystery": "mr-IN-ManoharNeural",
+    },
+    "English": {
+        "Default": "en-US-ChristopherNeural",
+        "Historical": "en-GB-SoniaNeural",
+        "Creative": "en-US-GuyNeural",
+        "Mythology": "en-IN-NeerjaNeural",
+        "TimeTravel": "en-US-AriaNeural",
+        "SciFi": "en-US-DavisNeural",
+        "Mystery": "en-US-GuyNeural",
+    },
 }
 
-async def generate_story_audio(text: str, story_type: str = "Historical"):
+# Fallback: English voice mapping for backwards compatibility
+VOICE_MAPPING = LANGUAGE_VOICE_MAP["English"]
+
+
+def _detect_language_from_text(text: str) -> str:
+    """Detect language from text by checking Unicode script ranges."""
+    # Take a sample of the text (first 500 chars, skip spaces/punctuation)
+    sample = text[:500]
+    
+    # Count characters in different script ranges
+    devanagari_count = len(re.findall(r'[\u0900-\u097F]', sample))  # Hindi, Marathi
+    latin_count = len(re.findall(r'[a-zA-Z]', sample))
+    
+    # If very few non-latin characters, default to English
+    if devanagari_count < 10 and latin_count > 20:
+        return "English"
+    
+    # If Devanagari script is dominant, default to Hindi
+    # (Marathi also uses Devanagari, but user can explicitly select Marathi if needed)
+    if devanagari_count > latin_count:
+        logger.info(f"Language auto-detected as: Hindi (Devanagari count: {devanagari_count})")
+        return "Hindi"
+    
+    logger.info(f"Language auto-detected as: English (Latin count: {latin_count})")
+    return "English"
+
+
+def _get_voice_for_language(language: str, story_type: str) -> str:
+    """Get the best voice for a given language and story type."""
+    lang_voices = LANGUAGE_VOICE_MAP.get(language, LANGUAGE_VOICE_MAP["English"])
+    
+    # Try story-type-specific voice first, then default for that language
+    voice = lang_voices.get(story_type, lang_voices.get("Default", "en-US-ChristopherNeural"))
+    logger.info(f"Selected voice: {voice} (language={language}, story_type={story_type})")
+    return voice
+
+
+async def generate_story_audio(text: str, story_type: str = "Historical", language: str = ""):
     try:
-        # Select voice based on story type
-        voice = VOICE_MAPPING.get(story_type, VOICE_MAPPING["Default"])
+        # Determine language: use explicit param, or auto-detect from text
+        if language and language in LANGUAGE_VOICE_MAP:
+            detected_language = language
+        else:
+            detected_language = _detect_language_from_text(text)
+        
+        # Select voice based on language + story type
+        voice = _get_voice_for_language(detected_language, story_type)
+        logger.info(f"Generating audio: language={detected_language}, story_type={story_type}, voice={voice}")
         
         # Split text into chunks by paragraph for parallel synthesis
         paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
@@ -75,7 +139,7 @@ async def generate_story_audio(text: str, story_type: str = "Historical"):
         }
         
     except Exception as e:
-        logger.error(f"FATAL: Error generating audio for story_type '{story_type}': {e}", exc_info=True)
+        logger.error(f"FATAL: Error generating audio for language='{language}', story_type='{story_type}': {e}", exc_info=True)
         return None
 
 def _synthesize_word_boundaries(sentence_alignment: list, full_text: str) -> list:
