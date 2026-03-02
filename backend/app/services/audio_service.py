@@ -81,18 +81,23 @@ def _get_voice_for_language(language: str, story_type: str) -> str:
 
 async def generate_story_audio(text: str, story_type: str = "Historical", language: str = ""):
     try:
+        # Clean Markdown bold tags (**) so they aren't read aloud as "star star" or "double asterisk"
+        # Also clean italics (*) if present
+        clean_text = re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+        clean_text = re.sub(r'\*(.*?)\*', r'\1', clean_text)
+        
         # Determine language: use explicit param, or auto-detect from text
         if language and language in LANGUAGE_VOICE_MAP:
             detected_language = language
         else:
-            detected_language = _detect_language_from_text(text)
+            detected_language = _detect_language_from_text(clean_text)
         
         # Select voice based on language + story type
         voice = _get_voice_for_language(detected_language, story_type)
         logger.info(f"Generating audio: language={detected_language}, story_type={story_type}, voice={voice}")
         
         # Split text into chunks by paragraph for parallel synthesis
-        paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+        paragraphs = [p.strip() for p in clean_text.split("\n\n") if p.strip()]
         
         # Synthesize paragraphs in parallel
         tasks = [_synthesize_chunk(p, voice) for p in paragraphs]
@@ -119,13 +124,13 @@ async def generate_story_audio(text: str, story_type: str = "Historical", langua
             
             # Update offset (using the end time of the last word in this chunk)
             if res["alignment"]:
-                current_time_offset = res["alignment"][-1]["end"] + 0.3 # Add slight pause between paragraphs
+                current_time_offset = res["alignment"][-1]["end"] + 0.1 # Reduced pause between paragraphs
         
         # FALLBACK: If no WordBoundary events, synthesize them from sentences
         word_boundaries = [a for a in combined_alignment if a["type"] == "WordBoundary"]
         if len(word_boundaries) == 0:
             logger.warning("No WordBoundary events found, synthesizing from sentences...")
-            combined_alignment = _synthesize_word_boundaries(combined_alignment, text)
+            combined_alignment = _synthesize_word_boundaries(combined_alignment, clean_text)
         
         # Save merged audio
         filename = f"{uuid.uuid4()}.mp3"

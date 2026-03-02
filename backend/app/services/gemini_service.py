@@ -50,7 +50,7 @@ Follow the specific instructions provided in each prompt carefully.
 
 # Dedicated model for Chat (Text Output, No Story System Prompt)
 chat_model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview",
+    model_name="gemini-1.5-flash",
     generation_config={
         "temperature": 0.7,
         "top_p": 0.95,
@@ -62,7 +62,7 @@ chat_model = genai.GenerativeModel(
 
 # Dedicated model for JSON Extraction tasks (No Story System Prompt)
 extraction_model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview",
+    model_name="gemini-1.5-flash",
     generation_config={
         "response_mime_type": "application/json",
     }
@@ -70,7 +70,7 @@ extraction_model = genai.GenerativeModel(
 
 
 image_prompt_model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview",
+    model_name="gemini-1.5-flash",
     generation_config={"response_mime_type": "application/json"},
     system_instruction="""You are an expert AI art director for historical visualizations.
     Your goal is to convert story events into SAFE, SCENE-BASED image prompts.
@@ -103,7 +103,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         5. Include world-building details appropriate to the {era} setting
         6. Create a narrative arc with beginning, middle, and end
         7. Create a detailed timeline with at least 4-5 key story moments/events
-        8. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be at least 800-1200 words long. Write at least 5-7 well-developed paragraphs. Do NOT write a short story. Expand on character motivations, settings, dialogue, and plot details to reach the minimum length.
+        8. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be very long and detailed, at least 1000-1500 words. Write 8-10 well-developed paragraphs. This must be a comprehensive "Big Story" with deep character exploration, atmospheric world-building, and intricate plot details.
         9. Conclude with a meaningful moral or lesson from the story
         
         Required Output Format (MUST be valid JSON):
@@ -118,7 +118,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
             {{"date": "Resolution", "event": "How the story concludes"}}
           ],
           "main_events_summary": ["Key plot point 1", "Key plot point 2", "Key plot point 3", "Key plot point 4"],
-          "story_content": "Full creative narrative written in {style} style. Use **markdown bold** for key names or terms. IMPORTANT: Separate paragraphs with double newlines (\\n\\n). Case study: Ensure the story is split into at least 4-5 clearly defined paragraphs.",
+          "story_content": "Full creative narrative written in {style} style. Use **markdown bold** for key names or terms. IMPORTANT: Separate paragraphs with double newlines (\\n\\n). Ensure the story is split into at least 8-10 clearly defined paragraphs for a Big Story experience.",
           "moral": "The key lesson or message of this story"
         }}
         
@@ -141,7 +141,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         6. Include both factual historical elements and creative storytelling
         7. Conclude with a meaningful moral or lesson
         8. STRUCTURE: Output the text in properly separated paragraphs.
-        9. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be at least 800-1200 words long. Write at least 5-7 well-developed paragraphs. Do NOT write a short story. Expand on character backstories, historical context, dialogue, and vivid descriptions to reach the minimum length.
+        9. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be a massive narrative, at least 1000-1500 words. Write 8-10 well-developed paragraphs. Expand significantly on historical backstories, context, and vivid descriptions to reach this "Big Story" length.
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -172,7 +172,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         3. Keep the tone mystical yet educational
         4. Write in {style} style
         5. Conclude with the modern relevance or moral
-        6. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be at least 800-1200 words long. Write at least 5-7 well-developed paragraphs. Do NOT write a short story. Expand on the mythological world, character details, symbolic meanings, and narrative tension to reach the minimum length.
+        6. **CRITICAL LENGTH REQUIREMENT**: This must be a grand epic retelling, at least 1000-1500 words long. Write 8-10 well-developed paragraphs. Deeply explore the mythological world, complex character interactions, and symbolic meanings to ensure a "Big Story".
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -200,7 +200,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         3. Describe how the world/setting changes as a result
         4. Make it thought-provoking but grounded in historical logic
         5. Write in {style} style
-        6. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be at least 800-1200 words long. Write at least 5-7 well-developed paragraphs. Do NOT write a short story. Expand on the consequences, political shifts, character perspectives, and world-building to reach the minimum length.
+        6. **CRITICAL LENGTH REQUIREMENT**: Generate a complex, multi-layered alternative history of at least 1000-1500 words. Write 8-10 paragraphs. Do NOT write a short summary; provide a comprehensive "Big Story" overview of the entire shifted world.
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -229,7 +229,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         3. Create a compelling narrative with conflict and resolution.
         4. World-building is key - describe the setting vividly.
         5. Write in {style} style.
-        6. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be at least 800-1200 words long. Write at least 5-7 well-developed paragraphs. Do NOT write a short story. Expand on world-building, technology descriptions, character interactions, and plot twists to reach the minimum length.
+        6. **CRITICAL LENGTH REQUIREMENT**: This is a space opera/sci-fi epic. You must write at least 1000-1500 words across 8-10 paragraphs. Expand heavily on world-building, speculative technology, and character drama for a "Big Story" feel.
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -258,7 +258,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         3. Build suspense and tension throughout the narrative.
         4. Reveal the solution in a satisfying climax.
         5. Write in {style} style (Noir, Thriller, or Classic Mystery).
-        6. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be at least 800-1200 words long. Write at least 5-7 well-developed paragraphs. Do NOT write a short story. Expand on detective work, suspect interrogations, twists, and atmospheric descriptions to reach the minimum length.
+        6. **CRITICAL LENGTH REQUIREMENT**: Craft a complex investigative narrative of 1000-1500 words. Write 8-10 paragraphs. Include multiple clues, interrogations, and detailed deductions to achieve a "Big Story" length.
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -286,7 +286,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         2. Describe the sensory shock (smells, sights, sounds) of the past
         3. Highlight the differences in technology, culture, and daily life
         4. Write in {style} style (likely First Person or Descriptive)
-        5. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be at least 800-1200 words long. Write at least 5-7 well-developed paragraphs. Do NOT write a short story. Expand on the time traveler's observations, cultural contrasts, character interactions, and emotional reflections to reach the minimum length.
+        5. **CRITICAL LENGTH REQUIREMENT**: Detailed time-travel log of at least 1000-1500 words. Write 8-10 paragraphs. This must be a "Big Story" focusing on the minute details of the past and the traveler's profound reflections.
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -317,7 +317,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         5. Include cultural, political, and social context of the {era} era
         6. Highlight the significance and impact of the events
         7. Conclude with a meaningful moral or lesson from this historical narrative
-        8. **CRITICAL LENGTH REQUIREMENT**: The story_content MUST be at least 800-1200 words long. Write at least 5-7 well-developed paragraphs. Do NOT write a short story. Expand on historical context, character motivations, key events, cause-and-effect chains, and vivid scene descriptions to reach the minimum length.
+        8. **CRITICAL LENGTH REQUIREMENT**: This is a major historical reconstruction. Write at least 1000-1500 words across 8-10 paragraphs. Include deep historical context, cause-effect chains, and scholarly detail for a truly "Big Story".
         
         Required Output Format (MUST be valid JSON):
         {{

@@ -41,6 +41,8 @@ export default function Dashboard() {
     const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
     const [highlightedSentenceIndex, setHighlightedSentenceIndex] = useState(-1);
     const [audioLoadingStep, setAudioLoadingStep] = useState(0);
+    const [playbackRate, setPlaybackRate] = useState(1);
+
 
     // Social State
     const [isPublic, setIsPublic] = useState(false);
@@ -349,6 +351,8 @@ export default function Dashboard() {
             console.log(`Time: ${now.toFixed(2)}s, Alignment items: ${alignment.length}`);
         }
 
+
+
         const activeWordIdx = alignment.findIndex((item) => {
             if (item.type !== 'word' || item.start === undefined) return false;
             // Add a small buffer for end time to keep highlight visible
@@ -392,6 +396,7 @@ export default function Dashboard() {
             }
             return;
         }
+
 
         if (!result?.story?.id) {
             alert("Story ID not found");
@@ -446,6 +451,8 @@ export default function Dashboard() {
                         setIsPlaying(true);
                     }
                 }, 100);
+
+
             } else {
                 alert("Failed to generate audio: " + (res.error || "Unknown error"));
             }
@@ -565,37 +572,40 @@ export default function Dashboard() {
             )}
 
             {/* Sidebar (History) */}
-            <aside className="w-64 border-r border-white/10 p-6 hidden md:flex flex-col">
-                <div className="flex items-center gap-2 mb-8">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 via-red-600 to-purple-700 flex items-center justify-center shadow-lg">
-                        <Feather size={16} className="text-white" />
+            <aside className="w-64 border-r border-white/10 p-6 hidden md:flex flex-col h-screen sticky top-0">
+                <div className="flex-shrink-0">
+                    <div className="flex items-center gap-2 mb-8">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 via-red-600 to-purple-700 flex items-center justify-center shadow-lg">
+                            <Feather size={16} className="text-white" />
+                        </div>
+                        <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">StoryNest</span>
                     </div>
-                    <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">StoryNest</span>
+
+                    <div className="mb-6 space-y-2">
+                        <button
+                            onClick={handleCreateNew}
+                            className="w-full py-3 px-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-lg text-white font-semibold flex items-center justify-center gap-2 shadow-lg transition-all"
+                        >
+                            <Plus size={18} />
+                            New Story
+                        </button>
+                        <Link
+                            href="/community"
+                            className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-gray-300 hover:text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                        >
+                            <LayoutDashboard size={18} />
+                            Community Feed
+                        </Link>
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
+                        <History size={14} />
+                        <span>Recent Adventures</span>
+                    </div>
                 </div>
 
-                <div className="mb-6 space-y-2">
-                    <button
-                        onClick={handleCreateNew}
-                        className="w-full py-3 px-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-lg text-white font-semibold flex items-center justify-center gap-2 shadow-lg transition-all"
-                    >
-                        <Plus size={18} />
-                        New Story
-                    </button>
-                    <Link
-                        href="/community"
-                        className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-gray-300 hover:text-white font-semibold flex items-center justify-center gap-2 transition-all"
-                    >
-                        <LayoutDashboard size={18} /> {/* Using LayoutDashboard as icon for community/feed for now or Globe if imported */}
-                        Community Feed
-                    </Link>
-                </div>
 
-                <div className="flex items-center gap-2 mb-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
-                    <History size={14} />
-                    <span>Recent Adventures</span>
-                </div>
-
-                <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar">
+                <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar min-h-0 pr-2">
                     {storyHistory.length === 0 ? (
                         <div className="text-sm text-gray-500 text-center py-4">No stories yet.</div>
                     ) : (
@@ -632,13 +642,15 @@ export default function Dashboard() {
                     )}
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-white/10">
+                <div className="mt-4 pt-4 border-t border-white/10 flex-shrink-0">
                     <CreditDisplay />
                     <div className="mt-4 text-[10px] text-gray-500 text-center font-medium">
                         Developed by Vipul Patil
                     </div>
                 </div>
+
             </aside>
+
 
             {/* Main Content Area */}
             <main className="flex-1 overflow-hidden flex flex-col relative h-screen">
@@ -716,62 +728,113 @@ export default function Dashboard() {
                                                 src={audioUrl}
                                                 onEnded={() => { setIsPlaying(false); setHighlightedWordIndex(-1); }}
                                                 onPause={() => setIsPlaying(false)}
-                                                onPlay={() => setIsPlaying(true)}
+                                                onPlay={() => {
+                                                    setIsPlaying(true);
+                                                    if (audioRef.current) {
+                                                        audioRef.current.playbackRate = playbackRate;
+                                                    }
+                                                }}
                                                 onTimeUpdate={handleTimeUpdate}
                                                 className="hidden"
                                             />
                                         )}
 
+
                                         <div className="flex items-center gap-4">
-                                            <button
-                                                onClick={handlePlayAudio}
-                                                disabled={isAudioLoading}
-                                                className={`w-12 h-12 flex items-center justify-center rounded-full shadow-lg transition-all
-                                                    ${isAudioLoading
-                                                        ? 'bg-gray-800 cursor-wait'
-                                                        : 'bg-orange-600 hover:bg-orange-500 text-white'
-                                                    }
-                                                `}
-                                            >
-                                                {isAudioLoading ? (
-                                                    <div className="flex items-center gap-0.5 h-4">
-                                                        {[0.4, 0.7, 0.5, 0.9, 0.6].map((h, i) => (
-                                                            <motion.div
-                                                                key={i}
-                                                                animate={{ height: ["20%", "100%", "20%"] }}
-                                                                transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.1 }}
-                                                                className="w-1 bg-white/60 rounded-full"
-                                                                style={{ height: `${h * 100}%` }}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                ) : isPlaying ? (
-                                                    <Pause size={24} className="fill-current" />
-                                                ) : (
-                                                    <Play size={24} className="fill-current ml-1" />
+                                            <div className="flex flex-col items-center gap-2">
+                                                <button
+                                                    onClick={handlePlayAudio}
+                                                    disabled={isAudioLoading}
+                                                    className={`w-12 h-12 flex items-center justify-center rounded-full shadow-lg transition-all
+                                                        ${isAudioLoading
+                                                            ? 'bg-gray-800 cursor-wait'
+                                                            : 'bg-orange-600 hover:bg-orange-500 text-white'
+                                                        }
+                                                    `}
+                                                >
+                                                    {isAudioLoading ? (
+                                                        <div className="flex items-center gap-0.5 h-4">
+                                                            {[0.4, 0.7, 0.5, 0.9, 0.6].map((h, i) => (
+                                                                <motion.div
+                                                                    key={i}
+                                                                    animate={{ height: ["20%", "100%", "20%"] }}
+                                                                    transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.1 }}
+                                                                    className="w-1 bg-white/60 rounded-full"
+                                                                    style={{ height: `${h * 100}%` }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    ) : isPlaying ? (
+                                                        <Pause size={24} className="fill-current" />
+                                                    ) : (
+                                                        <Play size={24} className="fill-current ml-1" />
+                                                    )}
+                                                </button>
+
+                                                {audioUrl && !isAudioLoading && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setAudioUrl(null);
+                                                            setAlignment([]);
+                                                            setIsPlaying(false);
+                                                            if (audioRef.current) audioRef.current.pause();
+                                                        }}
+                                                        className="text-[10px] uppercase font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1"
+                                                    >
+                                                        <X size={10} /> Exit
+                                                    </button>
                                                 )}
-                                            </button>
+
+
+                                            </div>
+
 
                                             <div className="flex-1">
-                                                <div className="text-sm font-bold text-gray-200">
-                                                    {isAudioLoading ? (
-                                                        <motion.span
-                                                            initial={{ opacity: 0 }}
-                                                            animate={{ opacity: 1 }}
-                                                            key={audioLoadingStep}
-                                                        >
-                                                            {
-                                                                [
-                                                                    "",
-                                                                    "Analyzing Narrative Tone...",
-                                                                    "Calibrating Era-Specific Voice...",
-                                                                    "Synthesizing Ancient Echoes...",
-                                                                    "Finalizing Cinematic Sync..."
-                                                                ][audioLoadingStep]
-                                                            }
-                                                        </motion.span>
-                                                    ) : "Listen to Story"}
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <div className="text-sm font-bold text-gray-200">
+                                                        {isAudioLoading ? (
+                                                            <motion.span
+                                                                initial={{ opacity: 0 }}
+                                                                animate={{ opacity: 1 }}
+                                                                key={audioLoadingStep}
+                                                            >
+                                                                {
+                                                                    [
+                                                                        "",
+                                                                        "Analyzing Narrative Tone...",
+                                                                        "Calibrating Era-Specific Voice...",
+                                                                        "Synthesizing Ancient Echoes...",
+                                                                        "Finalizing Cinematic Sync..."
+                                                                    ][audioLoadingStep]
+                                                                }
+                                                            </motion.span>
+                                                        ) : "Listen to Story"}
+                                                    </div>
+
+                                                    {/* Speed Selector */}
+                                                    {!isAudioLoading && audioUrl && (
+                                                        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
+                                                            {[0.75, 1, 1.25, 1.5].map((speed) => (
+                                                                <button
+                                                                    key={speed}
+                                                                    onClick={() => {
+                                                                        setPlaybackRate(speed);
+                                                                        if (audioRef.current) {
+                                                                            audioRef.current.playbackRate = speed;
+                                                                        }
+                                                                    }}
+                                                                    className={`px-2 py-0.5 text-[10px] font-bold rounded ${playbackRate === speed
+                                                                        ? 'bg-orange-500 text-white'
+                                                                        : 'text-gray-500 hover:text-gray-300'
+                                                                        }`}
+                                                                >
+                                                                    {speed}x
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
+
                                                 {/* Progress Bar */}
                                                 <div className="w-full bg-white/10 h-1 mt-2 rounded-full overflow-hidden">
                                                     <motion.div
@@ -783,6 +846,7 @@ export default function Dashboard() {
                                                 </div>
                                             </div>
                                         </div>
+
                                     </div>
 
                                     {/* Story Content */}
@@ -799,6 +863,9 @@ export default function Dashboard() {
                                                 const isSentenceActive = highlightedSentenceIndex === -1 || item.sentenceIdx === highlightedSentenceIndex;
                                                 const isWordActive = index === highlightedWordIndex;
 
+                                                // Clean up stars if they accidentally leaked into the alignment text
+                                                const cleanDisplayWord = item.text.replace(/\*/g, '');
+
                                                 return (
                                                     <span
                                                         key={index}
@@ -806,11 +873,13 @@ export default function Dashboard() {
                                                         className={`transition-all duration-300 inline text-lg
                                                             ${isWordActive ? 'text-orange-400 font-bold scale-110 shadow-orange-500/20' : isSentenceActive ? 'text-gray-100' : 'text-gray-600'}
                                                             ${isWordActive ? 'underline underline-offset-4' : ''}
+                                                            ${item.text.includes('**') ? 'font-bold' : ''}
                                                         `}
                                                     >
-                                                        {item.text}
+                                                        {cleanDisplayWord}
                                                     </span>
                                                 );
+
                                             })
                                         ) : (
                                             <div className="text-gray-300">
@@ -960,12 +1029,16 @@ export default function Dashboard() {
 
                     {/* Create Mode: Input Form */}
                     {viewMode === 'create' && (
-                        <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center custom-scrollbar">
-                            <div className="w-full max-w-2xl space-y-8 pb-20">
-                                <div className="text-center space-y-3">
-                                    <h2 className="text-4xl md:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-white via-orange-500 to-red-600 tracking-tighter">
+                        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-2 flex justify-center custom-scrollbar">
+                            <div className="w-full max-w-2xl space-y-6 pb-20">
+                                <div className="text-center space-y-3 pt-0">
+                                    <h2 className="text-4xl md:text-5xl lg:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-white via-orange-500 to-red-600 tracking-tighter py-4 leading-[1.2]">
                                         CRAFT YOUR MASTERPIECE
                                     </h2>
+
+
+
+
                                     <p className="text-gray-400 text-lg font-medium track-tight">From a single spark of a prompt to a cinematic universe.</p>
                                 </div>
 
