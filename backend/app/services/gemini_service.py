@@ -50,7 +50,7 @@ Follow the specific instructions provided in each prompt carefully.
 
 # Dedicated model for Chat (Text Output, No Story System Prompt)
 chat_model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview",
+    model_name="gemini-1.5-flash",
     generation_config={
         "temperature": 0.7,
         "top_p": 0.95,
@@ -62,7 +62,7 @@ chat_model = genai.GenerativeModel(
 
 # Dedicated model for JSON Extraction tasks (No Story System Prompt)
 extraction_model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview",
+    model_name="gemini-1.5-flash",
     generation_config={
         "response_mime_type": "application/json",
     }
@@ -70,7 +70,7 @@ extraction_model = genai.GenerativeModel(
 
 
 image_prompt_model = genai.GenerativeModel(
-    model_name="gemini-3-flash-preview",
+    model_name="gemini-1.5-flash",
     generation_config={"response_mime_type": "application/json"},
     system_instruction="""You are an expert AI art director for historical visualizations.
     Your goal is to convert story events into SAFE, SCENE-BASED image prompts.
@@ -102,23 +102,16 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         4. Write in {style} style, making it captivating and entertaining
         5. Include world-building details appropriate to the {era} setting
         6. Create a narrative arc with beginning, middle, and end
-        7. Create a detailed timeline with at least 4-5 key story moments/events
-        8. Length: Aim for 600-800 words for a concise yet detailed narrative.
+        7. Do NOT include any timeline - this is a fictional story
+        8. **LENGTH REQUIREMENT**: The story_content should be detailed and engaging, approximately 800-1000 words. Write 3-4 rich, well-developed paragraphs with vivid descriptions and compelling narrative.
         9. Conclude with a meaningful moral or lesson from the story
         
         Required Output Format (MUST be valid JSON):
         {{
           "title": "An engaging title for the story",
           "era": "{era}",
-          "timeline": [
-            {{"date": "Beginning", "event": "Opening scene description"}},
-            {{"date": "Early Adventure", "event": "First major event"}},
-            {{"date": "Mid Journey", "event": "Conflict or challenge"}},
-            {{"date": "Climax", "event": "Peak moment of the story"}},
-            {{"date": "Resolution", "event": "How the story concludes"}}
-          ],
           "main_events_summary": ["Key plot point 1", "Key plot point 2", "Key plot point 3", "Key plot point 4"],
-          "story_content": "Full creative narrative written in {style} style. Use **markdown bold** for key names or terms. IMPORTANT: Separate paragraphs with double newlines (\\n\\n). Case study: Ensure the story is split into at least 4-5 clearly defined paragraphs.",
+          "story_content": "Full creative narrative written in {style} style. Use **markdown bold** for key names or terms. IMPORTANT: Separate paragraphs with double newlines (\\n\\n). Ensure each paragraph is long, detailed, and immersive. Each paragraph should be 200-300 words.",
           "moral": "The key lesson or message of this story"
         }}
         
@@ -141,6 +134,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         6. Include both factual historical elements and creative storytelling
         7. Conclude with a meaningful moral or lesson
         8. STRUCTURE: Output the text in properly separated paragraphs.
+        9. **LENGTH REQUIREMENT**: The story_content should be a detailed narrative, approximately 800-1000 words. Write 3-4 rich, well-developed paragraphs with historical context and vivid descriptions.
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -171,14 +165,13 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         3. Keep the tone mystical yet educational
         4. Write in {style} style
         5. Conclude with the modern relevance or moral
+        6. Do NOT include any timeline - this is a mythological retelling
+        7. **CRITICAL LENGTH REQUIREMENT**: This must be a grand epic retelling, at least 800-1000 words long. Write 3-4 rich, well-developed paragraphs. Deeply explore the mythological world, complex character interactions, and symbolic meanings to ensure a "Big Story".
         
         Required Output Format (MUST be valid JSON):
         {{
           "title": "Title of the Myth/Legend",
           "era": "{era}",
-          "timeline": [
-            {{"date": "Origin/Phase", "event": "Key mythical event"}}
-          ],
           "main_events_summary": ["Mythic Event 1", "Mythic Event 2"],
           "story_content": "Full retelling of the myth/legend...",
           "moral": "Cultural lesson or moral"
@@ -198,6 +191,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         3. Describe how the world/setting changes as a result
         4. Make it thought-provoking but grounded in historical logic
         5. Write in {style} style
+        6. **LENGTH REQUIREMENT**: Generate a detailed alternative history of approximately 800-1000 words. Write 3-4 rich, well-developed paragraphs providing an engaging overview of the shifted world.
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -226,15 +220,13 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         3. Create a compelling narrative with conflict and resolution.
         4. World-building is key - describe the setting vividly.
         5. Write in {style} style.
+        6. Do NOT include any timeline - this is a fictional story.
+        7. **LENGTH REQUIREMENT**: Create an engaging sci-fi narrative of approximately 800-1000 words. Write 3-4 rich, well-developed paragraphs with vivid world-building and compelling character development.
         
         Required Output Format (MUST be valid JSON):
         {{
           "title": "Sci-Fi Title",
           "era": "{era}",
-          "timeline": [
-            {{"date": "Start", "event": "Intro"}},
-            {{"date": "Crisis", "event": "The problem emerges"}}
-          ],
           "main_events_summary": ["Discovery", "Conflict", "Resolution"],
           "story_content": "Full sci-fi narrative...",
           "moral": "Reflection on technology or progress"
@@ -254,15 +246,13 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         3. Build suspense and tension throughout the narrative.
         4. Reveal the solution in a satisfying climax.
         5. Write in {style} style (Noir, Thriller, or Classic Mystery).
+        6. Do NOT include any timeline - this is a fictional story.
+        7. **LENGTH REQUIREMENT**: Craft a compelling investigative narrative of approximately 800-1000 words. Write 3-4 rich, well-developed paragraphs with clues, red herrings, and deductions.
         
         Required Output Format (MUST be valid JSON):
         {{
           "title": "The Mystery of {topic}",
           "era": "{era}",
-          "timeline": [
-            {{"date": "The Incident", "event": "Discovery of the crime/mystery"}},
-            {{"date": "Investigation", "event": "Gathering clues"}}
-          ],
           "main_events_summary": ["The Crime", "The Suspects", "The Twist", "The Truth"],
           "story_content": "Full mystery narrative...",
           "moral": "Lesson on truth or justice"
@@ -281,15 +271,13 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         2. Describe the sensory shock (smells, sights, sounds) of the past
         3. Highlight the differences in technology, culture, and daily life
         4. Write in {style} style (likely First Person or Descriptive)
+        5. Do NOT include any timeline - this is a fictional story.
+        6. **LENGTH REQUIREMENT**: Create a detailed time-travel narrative of approximately 800-1000 words. Write 3-4 rich, well-developed paragraphs focusing on vivid details and meaningful reflections.
         
         Required Output Format (MUST be valid JSON):
         {{
           "title": "Time Traveler's Log: {topic}",
           "era": "{era}",
-          "timeline": [
-            {{"date": "Arrival", "event": "Arriving in {era}"}},
-            {{"date": "Encounter", "event": "Meeting the subject"}}
-          ],
           "main_events_summary": ["Arrival", "Culture Shock", "The Encounter", "Return"],
           "story_content": "Full narrative of the time travel experience...",
           "moral": "Reflection on the past vs present"
@@ -311,6 +299,7 @@ async def generate_story(topic: str, era: str, style: str, story_type: str = "Hi
         5. Include cultural, political, and social context of the {era} era
         6. Highlight the significance and impact of the events
         7. Conclude with a meaningful moral or lesson from this historical narrative
+        8. **LENGTH REQUIREMENT**: Create a comprehensive historical overview of approximately 800-1000 words. Write 3-4 rich, well-developed paragraphs with historical context and scholarly detail.
         
         Required Output Format (MUST be valid JSON):
         {{
@@ -426,14 +415,32 @@ async def generate_image_prompts(story_text: str, topic: str = "", era: str = ""
 
 async def extract_characters(story_text: str):
     prompt = f"""
-    Read the following story and list every person, divine figure, or named entity that plays a role.
-    If a character is mentioned by role but not name (e.g. 'The Old Hermit'), include that too.
+    Read the following story and extract ONLY the names of INDIVIDUAL CHARACTERS (actual people).
     
     Story:
     {story_text[:6000]}
     
-    IMPORTANT: You must return a VALID JSON object with a single key 'characters' containing an array of strings.
-    Example: {{"characters": ["Arjun", "Karna", "Krishna"]}}
+    STRICT RULES FOR CHARACTER EXTRACTION:
+    1. ONLY include individual people with proper names (e.g., "Shivaji Maharaj", "Jijabai", "Afzal Khan")
+    2. DO NOT include:
+       - Groups or collective entities (e.g., "Mughals", "Marathas", "soldiers", "cavalry")
+       - Empires, kingdoms, or political entities (e.g., "Maratha Empire", "Adilshahi Sultanate")
+       - Generic roles without specific names (e.g., "the poor", "villagers", "warriors", "ministers")
+       - Plural references to people (e.g., "friends", "invaders", "enemies")
+       - Titles alone without names (e.g., "Emperor", "General", "King")
+       - Places or locations (e.g., "Delhi", "Raigad")
+    3. If a role is mentioned WITH a specific name, include only the name (e.g., "General Pratap Singh" → "Pratap Singh")
+    4. Include divine figures or deities ONLY if they are individual characters in the narrative (e.g., "Krishna", "Rama")
+    5. Maximum 8-10 main characters - only include characters who have significant speaking roles or actions in the story
+    
+    Output Format (MUST be VALID JSON):
+    {{"characters": ["Character Name 1", "Character Name 2", "Character Name 3"]}}
+    
+    Example of CORRECT extraction:
+    {{"characters": ["Shivaji Maharaj", "Jijabai", "Shahaji", "Afzal Khan", "Aurangzeb", "Sambhaji"]}}
+    
+    Example of INCORRECT extraction (DO NOT DO THIS):
+    {{"characters": ["Maratha Empire", "the poor", "foreign invaders", "Mughals", "Ashta Pradhan", "soldiers"]}}
     """
     try:
         # Use extraction_model to avoid system prompt interference
@@ -444,8 +451,40 @@ async def extract_characters(story_text: str):
             text = text.replace("```json", "", 1).replace("```", "", 1).strip()
         elif text.startswith("```"):
             text = text.replace("```", "", 2).strip()
+        
+        result = json.loads(text)
+        
+        # Additional filtering on the backend to catch any mistakes
+        if "characters" in result:
+            filtered_chars = []
+            exclude_keywords = [
+                "empire", "kingdom", "sultanate", "army", "forces", "troops", 
+                "soldiers", "warriors", "cavalry", "infantry", "people", "poor",
+                "rich", "villagers", "citizens", "invaders", "friends", "enemies",
+                "ministers", "council", "court", "dynasty", "clan", "tribe",
+                "navy", "fleet", "regiment", "battalion"
+            ]
             
-        return json.loads(text)
+            for char in result["characters"]:
+                char_lower = char.lower()
+                # Skip if it's a plural (ends with 's' and doesn't end with specific patterns)
+                if char_lower.endswith('s') and not any(char_lower.endswith(suffix) for suffix in ['us', 'is', 'as', 'os', 'ji', 'ais', 'ess']):
+                    continue
+                # Skip if contains any exclude keywords
+                if any(keyword in char_lower for keyword in exclude_keywords):
+                    continue
+                # Skip if it's too short (likely not a proper name)
+                if len(char.strip()) < 3:
+                    continue
+                # Skip if it starts with "the " (generic reference)
+                if char_lower.startswith("the "):
+                    continue
+                    
+                filtered_chars.append(char)
+            
+            result["characters"] = filtered_chars[:10]  # Limit to 10 characters
+            
+        return result
     except Exception as e:
         logger.error(f"Error extracting characters: {e}")
         return {"characters": []}

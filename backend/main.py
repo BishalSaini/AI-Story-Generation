@@ -1,3 +1,9 @@
+from dotenv import load_dotenv
+import os
+
+# Load .env file FIRST before any other imports
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 # Force reload for logging update

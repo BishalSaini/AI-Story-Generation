@@ -2,11 +2,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 import json
+from app.services.groq_service import generate_story_groq, generate_image_prompts_groq
 from app.services.gemini_service import generate_story, generate_image_prompts
 from app.services.image_service import generate_image
+from app.core.config import settings
 import asyncio
 
 router = APIRouter()
+
+# Use Groq if available, fallback to Gemini
+USE_GROQ = bool(settings.GROQ_API_KEY)
 
 class StoryRequest(BaseModel):
     clerkId: str # Retained for potential logging/context but unused for logic now
@@ -21,8 +26,12 @@ class StoryRequest(BaseModel):
 # Stateless Generation Endpoint
 @router.post("/generate")
 async def create_story(request: StoryRequest):
-    # 1. Generate Story text
-    story_data = await generate_story(request.topic, request.era, request.style, request.storyType, request.language)
+    # 1. Generate Story text using Groq (faster) or Gemini (fallback)
+    if USE_GROQ:
+        story_data = await generate_story_groq(request.topic, request.era, request.style, request.storyType, request.language)
+    else:
+        story_data = await generate_story(request.topic, request.era, request.style, request.storyType, request.language)
+    
     if not story_data or "error" in story_data:
         raise HTTPException(status_code=500, detail=f"AI Story Generation failed: {story_data.get('error') if story_data else 'Unknown Error'}")
 
@@ -30,12 +39,20 @@ async def create_story(request: StoryRequest):
     
     # 2. Extract/Generate Visual Prompts (Only if withImages is True)
     if request.withImages:
-        prompts_data = await generate_image_prompts(
-            story_data.get("story_content", ""),
-            topic=request.topic,
-            era=request.era,
-            story_type=request.storyType
-        )
+        if USE_GROQ:
+            prompts_data = await generate_image_prompts_groq(
+                story_data.get("story_content", ""),
+                topic=request.topic,
+                era=request.era,
+                story_type=request.storyType
+            )
+        else:
+            prompts_data = await generate_image_prompts(
+                story_data.get("story_content", ""),
+                topic=request.topic,
+                era=request.era,
+                story_type=request.storyType
+            )
         image_prompts = prompts_data.get("image_prompts", [])
         if not image_prompts:
             print("Warning: No image prompts generated. Using fallback.")
@@ -44,20 +61,16 @@ async def create_story(request: StoryRequest):
                 "negative_prompt": "text, watermark, distorted, realistic faces"
             }]
 
-        # 3. Generate Images (Sequential with delay to avoid rate limiting)
-        image_urls = []
+        # 3. Generate Images (Parallel for speed)
         # Limit to 2 images for efficiency
+        image_tasks = []
         for i, p in enumerate(image_prompts[:2]):
             desc = p.get("scene_description", "")
             neg = p.get("negative_prompt", "")
-            
-            # Add delay between requests to avoid rate limiting (except for first image)
-            if i > 0:
-                await asyncio.sleep(3)  # 3 second delay between requests
-            
-            url = await generate_image(desc, neg)
-            image_urls.append(url)
-
+            image_tasks.append(generate_image(desc, neg))
+        
+        # Generate all images in parallel
+        image_urls = await asyncio.gather(*image_tasks)
 
         for i, url in enumerate(image_urls):
             generated_images.append({
@@ -86,10 +99,11 @@ from app.services.audio_service import generate_story_audio
 class AudioRequest(BaseModel):
     text: str
     storyType: str = "Historical"
+    language: str = ""
 
 @router.post("/generate-audio")
 async def create_audio(request: AudioRequest):
-    result = await generate_story_audio(request.text, request.storyType)
+    result = await generate_story_audio(request.text, request.storyType, request.language)
     if not result:
         raise HTTPException(status_code=500, detail="Audio generation failed")
     

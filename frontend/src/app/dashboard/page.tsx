@@ -2,10 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, Send, History, Image as ImageIcon, Play, Pause, Square, Volume2, MessageCircle, X, User, Plus, LayoutDashboard, ChevronLeft, ChevronRight, Feather } from 'lucide-react';
+import { Loader2, Send, History, Image as ImageIcon, Play, Pause, Square, Volume2, MessageCircle, X, User, Plus, LayoutDashboard, ChevronLeft, ChevronRight, Feather, Trash2 } from 'lucide-react';
 import { generateAndSaveStory, extractCharacters, messageCharacter } from '../actions/story';
+import { togglePublishStory } from '../actions/social';
+
 import { generateAndSaveAudio, getStoredAudio } from '../actions/audio';
-import { getUserStories, getStoryById } from '../actions/history';
+import { getUserStories, getStoryById, deleteStory } from '../actions/history';
 import CreditDisplay from '@/components/CreditDisplay';
 import ModernLoader from '@/components/ModernLoader';
 import { initializeUserCredits } from '../actions/credits';
@@ -28,6 +30,7 @@ export default function Dashboard() {
     const [style, setStyle] = useState("Narrative");
     const [language, setLanguage] = useState("English");
     const [withImages, setWithImages] = useState(true);
+    const [characterName, setCharacterName] = useState("");
 
     // Audio State
     const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -38,6 +41,12 @@ export default function Dashboard() {
     const [highlightedWordIndex, setHighlightedWordIndex] = useState(-1);
     const [highlightedSentenceIndex, setHighlightedSentenceIndex] = useState(-1);
     const [audioLoadingStep, setAudioLoadingStep] = useState(0);
+    const [playbackRate, setPlaybackRate] = useState(1);
+
+
+    // Social State
+    const [isPublic, setIsPublic] = useState(false);
+
 
     // Refs
     const audioRef = React.useRef<HTMLAudioElement | null>(null);
@@ -87,6 +96,7 @@ export default function Dashboard() {
         setViewMode('create');
         setResult(null);
         setTopic("");
+        setCharacterName("");
         setShowChatPanel(false);
     };
 
@@ -106,7 +116,10 @@ export default function Dashboard() {
             });
 
             // Load cached audio if available
+            if (story.isPublic !== undefined) setIsPublic(story.isPublic);
+
             if (story.audioUrl && story.audioAlignment) {
+
                 const backendUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || "http://localhost:8000";
                 const fullUrl = `${backendUrl}${story.audioUrl}`;
                 setAudioUrl(fullUrl);
@@ -169,7 +182,10 @@ export default function Dashboard() {
             const response = await generateAndSaveStory(
                 user?.id || "guest",
                 user?.primaryEmailAddress?.emailAddress || "guest@example.com",
-                topic,
+                // For Creative stories with character name, prepend it to the topic
+                finalStoryType === "Creative" && characterName.trim()
+                    ? `${characterName.trim()}: ${topic}`
+                    : topic,
                 era,
                 style,
                 finalStoryType,
@@ -193,7 +209,9 @@ export default function Dashboard() {
                 }
                 setViewMode('view');
                 setShowChatPanel(false);
+                setIsPublic(false); // New stories are private by default
             } else {
+
                 alert("Generation failed: " + response.error);
             }
 
@@ -207,7 +225,23 @@ export default function Dashboard() {
     };
 
 
+    const handlePublish = async () => {
+        if (!result?.story?.id) return;
+
+        // Optimistic UI update could be done here, but let's wait for server
+        const res = await togglePublishStory(result.story.id);
+
+        if (res.success && typeof res.isPublic === 'boolean') { // Ensure isPublic is boolean
+            setIsPublic(res.isPublic);
+            // Refresh history to update any badges
+            await loadStoryHistory();
+        } else {
+            alert("Failed to update publish status");
+        }
+    };
+
     const preprocessAlignment = (rawAlignment: any[], text: string): any[] => {
+
         console.log("=== PREPROCESSING ALIGNMENT ===");
         console.log("Raw alignment length:", rawAlignment.length);
         console.log("Text length:", text.length);
@@ -317,6 +351,8 @@ export default function Dashboard() {
             console.log(`Time: ${now.toFixed(2)}s, Alignment items: ${alignment.length}`);
         }
 
+
+
         const activeWordIdx = alignment.findIndex((item) => {
             if (item.type !== 'word' || item.start === undefined) return false;
             // Add a small buffer for end time to keep highlight visible
@@ -361,6 +397,7 @@ export default function Dashboard() {
             return;
         }
 
+
         if (!result?.story?.id) {
             alert("Story ID not found");
             return;
@@ -379,7 +416,8 @@ export default function Dashboard() {
             const res = await generateAndSaveAudio(
                 result.story.id,
                 result.story.story_content,
-                result.story.storyType || result.story.style || "Historical"
+                result.story.storyType || result.story.style || "Historical",
+                language
             );
 
             if (res.success && res.audioUrl) {
@@ -413,6 +451,8 @@ export default function Dashboard() {
                         setIsPlaying(true);
                     }
                 }, 100);
+
+
             } else {
                 alert("Failed to generate audio: " + (res.error || "Unknown error"));
             }
@@ -476,19 +516,42 @@ export default function Dashboard() {
         setIsChatLoading(false);
     };
 
+    const handleDeleteStory = async (storyId: string, storyTitle: string, e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent loading the story when clicking delete
+
+        if (!confirm(`Are you sure you want to delete "${storyTitle}"? This action cannot be undone.`)) {
+            return;
+        }
+
+        if (!user?.id) return;
+
+        const res = await deleteStory(storyId, user.id);
+        if (res.success) {
+            // If the deleted story is currently being viewed, clear the view
+            if (result?.story?.id === storyId) {
+                setResult(null);
+                setViewMode('create');
+            }
+            // Refresh the story history
+            await loadStoryHistory();
+        } else {
+            alert("Failed to delete story: " + res.error);
+        }
+    };
+
     const renderFormattedText = (text: string) => {
         if (!text) return null;
         return text.split('\n').map((line, i) => {
-            // Handle double newlines as paragraph breaks
-            if (!line.trim()) return <br key={`br-${i}`} className="block h-4" />;
+            // Handle double newlines as narrow paragraph breaks for book style
+            if (!line.trim()) return <div key={`spacer-${i}`} className="h-4" aria-hidden="true" />;
 
             // Bold parser for **text**
             const parts = line.split(/(\*\*.*?\*\*)/g);
             return (
-                <p key={i} className="mb-4 text-gray-300 leading-relaxed">
+                <p key={i} className="mb-6 text-gray-200 leading-[1.7] font-outfit indent-6 text-left tracking-tight selection:bg-orange-500/30 text-lg">
                     {parts.map((part, j) => {
                         if (part.startsWith('**') && part.endsWith('**')) {
-                            return <strong key={j} className="text-white font-bold">{part.slice(2, -2)}</strong>;
+                            return <strong key={j} className="text-white font-bold tracking-tight">{part.slice(2, -2)}</strong>;
                         }
                         return part;
                     })}
@@ -509,61 +572,85 @@ export default function Dashboard() {
             )}
 
             {/* Sidebar (History) */}
-            <aside className="w-64 border-r border-white/10 p-6 hidden md:flex flex-col">
-                <div className="flex items-center gap-2 mb-8">
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 via-red-600 to-purple-700 flex items-center justify-center shadow-lg">
-                        <Feather size={16} className="text-white" />
+            <aside className="w-64 border-r border-white/10 p-6 hidden md:flex flex-col h-screen sticky top-0">
+                <div className="flex-shrink-0">
+                    <div className="flex items-center gap-2 mb-8">
+                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 via-red-600 to-purple-700 flex items-center justify-center shadow-lg">
+                            <Feather size={16} className="text-white" />
+                        </div>
+                        <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">StoryNest</span>
                     </div>
-                    <span className="text-xl font-black tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">StoryNest</span>
+
+                    <div className="mb-6 space-y-2">
+                        <button
+                            onClick={handleCreateNew}
+                            className="w-full py-3 px-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-lg text-white font-semibold flex items-center justify-center gap-2 shadow-lg transition-all"
+                        >
+                            <Plus size={18} />
+                            New Story
+                        </button>
+                        <Link
+                            href="/community"
+                            className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-gray-300 hover:text-white font-semibold flex items-center justify-center gap-2 transition-all"
+                        >
+                            <LayoutDashboard size={18} />
+                            Community Feed
+                        </Link>
+                    </div>
+
+                    <div className="flex items-center gap-2 mb-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
+                        <History size={14} />
+                        <span>Recent Adventures</span>
+                    </div>
                 </div>
 
-                <div className="mb-6">
-                    <button
-                        onClick={handleCreateNew}
-                        className="w-full py-3 px-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 rounded-lg text-white font-semibold flex items-center justify-center gap-2 shadow-lg transition-all"
-                    >
-                        <Plus size={18} />
-                        New Story
-                    </button>
-                </div>
 
-                <div className="flex items-center gap-2 mb-4 text-gray-400 font-bold text-xs uppercase tracking-widest">
-                    <History size={14} />
-                    <span>Recent Adventures</span>
-                </div>
-
-                <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar">
+                <div className="space-y-2 flex-1 overflow-y-auto custom-scrollbar min-h-0 pr-2">
                     {storyHistory.length === 0 ? (
                         <div className="text-sm text-gray-500 text-center py-4">No stories yet.</div>
                     ) : (
                         storyHistory.map((story) => (
-                            <button
+                            <div
                                 key={story.id}
-                                onClick={() => loadStoryFromHistory(story.id)}
-                                className={`w-full text-left p-3 rounded-lg transition-all border
+                                className={`relative group w-full rounded-lg transition-all border
                                     ${result?.story.title === story.title
                                         ? 'bg-white/10 border-orange-500/50 text-white'
                                         : 'bg-transparent border-transparent hover:bg-white/5 text-gray-400 hover:text-white'
                                     }`}
                             >
-                                <div className="text-sm font-semibold truncate leading-tight">
-                                    {story.title}
-                                </div>
-                                <div className="text-[10px] text-gray-500 mt-1">
-                                    {story.era} • {new Date(story.createdAt).toLocaleDateString()}
-                                </div>
-                            </button>
+                                <button
+                                    onClick={() => loadStoryFromHistory(story.id)}
+                                    className="w-full text-left p-3"
+                                >
+                                    <div className="text-sm font-semibold truncate leading-tight pr-6">
+                                        {story.title}
+                                    </div>
+                                    <div className="text-[10px] text-gray-500 mt-1">
+                                        {story.era} • {new Date(story.createdAt).toLocaleDateString()}
+                                        {(story as any).isPublic && <span className="ml-2 text-green-400 text-[10px] border border-green-500/30 px-1 rounded">PUBLIC</span>}
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={(e) => handleDeleteStory(story.id, story.title, e)}
+                                    className="absolute top-2 right-2 p-1.5 rounded-md bg-red-500/10 text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-500/20 transition-all"
+                                    title="Delete story"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         ))
                     )}
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-white/10">
+                <div className="mt-4 pt-4 border-t border-white/10 flex-shrink-0">
                     <CreditDisplay />
                     <div className="mt-4 text-[10px] text-gray-500 text-center font-medium">
                         Developed by Vipul Patil
                     </div>
                 </div>
+
             </aside>
+
 
             {/* Main Content Area */}
             <main className="flex-1 overflow-hidden flex flex-col relative h-screen">
@@ -582,6 +669,17 @@ export default function Dashboard() {
                     </div>
                     {viewMode === 'view' && (
                         <div className="flex items-center gap-2">
+                            <button
+                                onClick={handlePublish}
+                                className={`px-4 py-2 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium
+                                    ${isPublic
+                                        ? 'bg-green-500/20 border-green-500 text-green-400 hover:bg-green-500/30'
+                                        : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                                    }`}
+                            >
+                                <LayoutDashboard size={18} /> {/* Reusing icon, ideally Globe */}
+                                {isPublic ? "Published" : "Publish"}
+                            </button>
                             <button
                                 onClick={() => setShowChatPanel(!showChatPanel)}
                                 className={`p-2 rounded-lg border transition-all flex items-center gap-2 text-sm font-medium
@@ -603,8 +701,9 @@ export default function Dashboard() {
                         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                             <div className="max-w-4xl mx-auto pb-20">
 
-                                <div className="p-8 rounded-2xl bg-[#15151a] border border-white/5 shadow-2xl relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-red-600 shadow-[0_0_15px_rgba(249,115,22,0.3)]" />
+                                <div className="p-10 md:p-16 rounded-3xl bg-[#121217] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden ring-1 ring-white/5">
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 via-orange-500 to-red-600 opacity-60" />
+                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(249,115,22,0.03),transparent_50%)] pointer-events-none" />
 
                                     {/* Images */}
                                     {result.images && result.images.length > 0 && (
@@ -630,62 +729,113 @@ export default function Dashboard() {
                                                 src={audioUrl}
                                                 onEnded={() => { setIsPlaying(false); setHighlightedWordIndex(-1); }}
                                                 onPause={() => setIsPlaying(false)}
-                                                onPlay={() => setIsPlaying(true)}
+                                                onPlay={() => {
+                                                    setIsPlaying(true);
+                                                    if (audioRef.current) {
+                                                        audioRef.current.playbackRate = playbackRate;
+                                                    }
+                                                }}
                                                 onTimeUpdate={handleTimeUpdate}
                                                 className="hidden"
                                             />
                                         )}
 
+
                                         <div className="flex items-center gap-4">
-                                            <button
-                                                onClick={handlePlayAudio}
-                                                disabled={isAudioLoading}
-                                                className={`w-12 h-12 flex items-center justify-center rounded-full shadow-lg transition-all
-                                                    ${isAudioLoading
-                                                        ? 'bg-gray-800 cursor-wait'
-                                                        : 'bg-orange-600 hover:bg-orange-500 text-white'
-                                                    }
-                                                `}
-                                            >
-                                                {isAudioLoading ? (
-                                                    <div className="flex items-center gap-0.5 h-4">
-                                                        {[0.4, 0.7, 0.5, 0.9, 0.6].map((h, i) => (
-                                                            <motion.div
-                                                                key={i}
-                                                                animate={{ height: ["20%", "100%", "20%"] }}
-                                                                transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.1 }}
-                                                                className="w-1 bg-white/60 rounded-full"
-                                                                style={{ height: `${h * 100}%` }}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                ) : isPlaying ? (
-                                                    <Pause size={24} className="fill-current" />
-                                                ) : (
-                                                    <Play size={24} className="fill-current ml-1" />
+                                            <div className="flex flex-col items-center gap-2">
+                                                <button
+                                                    onClick={handlePlayAudio}
+                                                    disabled={isAudioLoading}
+                                                    className={`w-12 h-12 flex items-center justify-center rounded-full shadow-lg transition-all
+                                                        ${isAudioLoading
+                                                            ? 'bg-gray-800 cursor-wait'
+                                                            : 'bg-orange-600 hover:bg-orange-500 text-white'
+                                                        }
+                                                    `}
+                                                >
+                                                    {isAudioLoading ? (
+                                                        <div className="flex items-center gap-0.5 h-4">
+                                                            {[0.4, 0.7, 0.5, 0.9, 0.6].map((h, i) => (
+                                                                <motion.div
+                                                                    key={i}
+                                                                    animate={{ height: ["20%", "100%", "20%"] }}
+                                                                    transition={{ duration: 0.6, repeat: Infinity, delay: i * 0.1 }}
+                                                                    className="w-1 bg-white/60 rounded-full"
+                                                                    style={{ height: `${h * 100}%` }}
+                                                                />
+                                                            ))}
+                                                        </div>
+                                                    ) : isPlaying ? (
+                                                        <Pause size={24} className="fill-current" />
+                                                    ) : (
+                                                        <Play size={24} className="fill-current ml-1" />
+                                                    )}
+                                                </button>
+
+                                                {audioUrl && !isAudioLoading && (
+                                                    <button
+                                                        onClick={() => {
+                                                            setAudioUrl(null);
+                                                            setAlignment([]);
+                                                            setIsPlaying(false);
+                                                            if (audioRef.current) audioRef.current.pause();
+                                                        }}
+                                                        className="text-[10px] uppercase font-bold text-gray-500 hover:text-red-500 transition-colors flex items-center gap-1"
+                                                    >
+                                                        <X size={10} /> Exit
+                                                    </button>
                                                 )}
-                                            </button>
+
+
+                                            </div>
+
 
                                             <div className="flex-1">
-                                                <div className="text-sm font-bold text-gray-200">
-                                                    {isAudioLoading ? (
-                                                        <motion.span
-                                                            initial={{ opacity: 0 }}
-                                                            animate={{ opacity: 1 }}
-                                                            key={audioLoadingStep}
-                                                        >
-                                                            {
-                                                                [
-                                                                    "",
-                                                                    "Analyzing Narrative Tone...",
-                                                                    "Calibrating Era-Specific Voice...",
-                                                                    "Synthesizing Ancient Echoes...",
-                                                                    "Finalizing Cinematic Sync..."
-                                                                ][audioLoadingStep]
-                                                            }
-                                                        </motion.span>
-                                                    ) : "Listen to Story"}
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <div className="text-sm font-bold text-gray-200">
+                                                        {isAudioLoading ? (
+                                                            <motion.span
+                                                                initial={{ opacity: 0 }}
+                                                                animate={{ opacity: 1 }}
+                                                                key={audioLoadingStep}
+                                                            >
+                                                                {
+                                                                    [
+                                                                        "",
+                                                                        "Analyzing Narrative Tone...",
+                                                                        "Calibrating Era-Specific Voice...",
+                                                                        "Synthesizing Ancient Echoes...",
+                                                                        "Finalizing Cinematic Sync..."
+                                                                    ][audioLoadingStep]
+                                                                }
+                                                            </motion.span>
+                                                        ) : "Listen to Story"}
+                                                    </div>
+
+                                                    {/* Speed Selector */}
+                                                    {!isAudioLoading && audioUrl && (
+                                                        <div className="flex items-center gap-1 bg-white/5 rounded-lg p-1 border border-white/10">
+                                                            {[0.75, 1, 1.25, 1.5].map((speed) => (
+                                                                <button
+                                                                    key={speed}
+                                                                    onClick={() => {
+                                                                        setPlaybackRate(speed);
+                                                                        if (audioRef.current) {
+                                                                            audioRef.current.playbackRate = speed;
+                                                                        }
+                                                                    }}
+                                                                    className={`px-2 py-0.5 text-[10px] font-bold rounded ${playbackRate === speed
+                                                                        ? 'bg-orange-500 text-white'
+                                                                        : 'text-gray-500 hover:text-gray-300'
+                                                                        }`}
+                                                                >
+                                                                    {speed}x
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
+
                                                 {/* Progress Bar */}
                                                 <div className="w-full bg-white/10 h-1 mt-2 rounded-full overflow-hidden">
                                                     <motion.div
@@ -697,35 +847,55 @@ export default function Dashboard() {
                                                 </div>
                                             </div>
                                         </div>
+
                                     </div>
 
                                     {/* Story Content */}
                                     <div
                                         ref={storyContainerRef}
-                                        className="prose prose-invert prose-lg max-w-none leading-relaxed whitespace-pre-wrap select-none scroll-mt-24"
+                                        className="font-outfit leading-[1.8] text-left scroll-mt-24 space-y-0"
                                     >
                                         {alignment.length > 0 ? (
-                                            alignment.map((item, index) => {
-                                                if (item.type === 'paragraph_break') return <span key={index} className="block h-8" aria-hidden="true" />;
-                                                if (item.type === 'line_break') return <span key={index} className="block h-4" aria-hidden="true" />;
-                                                if (item.type === 'space') return <span key={index}>{item.text}</span>;
+                                            (() => {
+                                                // Group into paragraphs for book styling
+                                                let currentParagraph: any[] = [];
+                                                const paragraphs: any[][] = [];
 
-                                                const isSentenceActive = highlightedSentenceIndex === -1 || item.sentenceIdx === highlightedSentenceIndex;
-                                                const isWordActive = index === highlightedWordIndex;
+                                                alignment.forEach((item) => {
+                                                    if (item.type === 'paragraph_break') {
+                                                        if (currentParagraph.length > 0) paragraphs.push(currentParagraph);
+                                                        currentParagraph = [];
+                                                    } else {
+                                                        currentParagraph.push(item);
+                                                    }
+                                                });
+                                                if (currentParagraph.length > 0) paragraphs.push(currentParagraph);
 
-                                                return (
-                                                    <span
-                                                        key={index}
-                                                        id={`word-${index}`}
-                                                        className={`transition-all duration-300 inline text-lg
-                                                            ${isWordActive ? 'text-orange-400 font-bold scale-110 shadow-orange-500/20' : isSentenceActive ? 'text-gray-100' : 'text-gray-600'}
-                                                            ${isWordActive ? 'underline underline-offset-4' : ''}
-                                                        `}
-                                                    >
-                                                        {item.text}
-                                                    </span>
-                                                );
-                                            })
+                                                return paragraphs.map((paraItems, pIdx) => (
+                                                    <p key={pIdx} className="mb-6 indent-6 text-gray-100 text-lg md:text-xl">
+                                                        {paraItems.map((item, index) => {
+                                                            if (item.type === 'line_break') return <br key={index} />;
+                                                            if (item.type === 'space') return <span key={index}>{item.text}</span>;
+
+                                                            const isSentenceActive = highlightedSentenceIndex === -1 || item.sentenceIdx === highlightedSentenceIndex;
+                                                            const isWordActive = (alignment.indexOf(paraItems[0]) + index) === highlightedWordIndex;
+
+                                                            return (
+                                                                <span
+                                                                    key={index}
+                                                                    id={`word-${alignment.indexOf(paraItems[0]) + index}`}
+                                                                    className={`transition-all duration-300 inline
+                                                                        ${isWordActive ? 'text-orange-400 font-bold drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]' : isSentenceActive ? 'text-gray-100' : 'text-gray-500'}
+                                                                        ${item.text.includes('**') ? 'font-bold' : ''}
+                                                                    `}
+                                                                >
+                                                                    {item.text.replace(/\*/g, '')}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </p>
+                                                ));
+                                            })()
                                         ) : (
                                             <div className="text-gray-300">
                                                 {renderFormattedText(result.story.story_content)}
@@ -733,8 +903,8 @@ export default function Dashboard() {
                                         )}
                                     </div>
 
-                                    {/* Timeline */}
-                                    {result.story.timeline && (
+                                    {/* Timeline - Only for factual story types */}
+                                    {result.story.timeline && result.story.timeline.length > 0 && ['Historical', 'Hybrid', 'AltHistory'].includes(storyType) && (
                                         <div className="mt-12 pt-8 border-t border-white/10">
                                             <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2">
                                                 <History size={18} className="text-orange-500" /> Timeline of Events
@@ -793,7 +963,7 @@ export default function Dashboard() {
                                                     <Loader2 size={16} className="animate-spin" /> Identifying characters...
                                                 </div>
                                             ) : (
-                                                <div className="w-full space-y-2">
+                                                <div className="w-full space-y-2 max-h-[450px] overflow-y-auto custom-scrollbar pr-2">
                                                     {chatCharacters.map((char, i) => (
                                                         <button
                                                             key={i}
@@ -874,12 +1044,16 @@ export default function Dashboard() {
 
                     {/* Create Mode: Input Form */}
                     {viewMode === 'create' && (
-                        <div className="flex-1 overflow-y-auto p-4 md:p-8 flex items-center justify-center custom-scrollbar">
-                            <div className="w-full max-w-2xl space-y-8 pb-20">
-                                <div className="text-center space-y-3">
-                                    <h2 className="text-4xl md:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-white via-orange-500 to-red-600 tracking-tighter">
+                        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-2 flex justify-center custom-scrollbar">
+                            <div className="w-full max-w-2xl space-y-6 pb-20">
+                                <div className="text-center space-y-3 pt-0">
+                                    <h2 className="text-4xl md:text-5xl lg:text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-white via-orange-500 to-red-600 tracking-tighter py-4 leading-[1.2]">
                                         CRAFT YOUR MASTERPIECE
                                     </h2>
+
+
+
+
                                     <p className="text-gray-400 text-lg font-medium track-tight">From a single spark of a prompt to a cinematic universe.</p>
                                 </div>
 
@@ -962,10 +1136,27 @@ export default function Dashboard() {
                                                 <option value="English">English</option>
                                                 <option value="Hindi">Hindi</option>
                                                 <option value="Marathi">Marathi</option>
-                                                <option value="Sanskrit">Sanskrit</option>
                                             </select>
                                         </div>
                                     </div>
+
+                                    {/* Custom Character Name (Only for Creative stories) */}
+                                    {storyType === "Creative" && (
+                                        <div className="bg-orange-500/5 border border-orange-500/20 rounded-xl p-4">
+                                            <label className="block text-sm font-medium text-orange-400 mb-2 flex items-center gap-2">
+                                                <User size={16} />
+                                                Character Name (Optional)
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={characterName}
+                                                onChange={(e) => setCharacterName(e.target.value)}
+                                                placeholder="e.g. Captain Zara, Alex the Explorer, Maya"
+                                                className="w-full bg-black/40 border border-orange-500/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-2">Give your protagonist a name to make the story more personal!</p>
+                                        </div>
+                                    )}
 
                                     {/* Image Toggle */}
                                     <div className="flex items-center justify-between bg-black/20 p-4 rounded-xl border border-white/5">

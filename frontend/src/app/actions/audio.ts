@@ -6,18 +6,22 @@ import axios from "axios";
 export async function generateAndSaveAudio(
     storyId: string,
     text: string,
-    storyType: string
+    storyType: string,
+    language: string = ""
 ) {
     try {
         // First check if audio already exists for this story
         const existingStory = await prisma.story.findUnique({
             where: { id: storyId },
             // @ts-ignore - audioUrl and audioAlignment added in recent migration
-            select: { audioUrl: true, audioAlignment: true }
+            select: { audioUrl: true, audioAlignment: true, audioLanguage: true }
         }) as any;
 
-        // If audio already exists, return it
-        if (existingStory?.audioUrl && existingStory?.audioAlignment) {
+        // If audio already exists AND was generated with the same language, return cached version
+        const cachedLang = existingStory?.audioLanguage || "English";
+        const requestedLang = language || "English";
+
+        if (existingStory?.audioUrl && existingStory?.audioAlignment && cachedLang === requestedLang) {
             return {
                 success: true,
                 audioUrl: existingStory.audioUrl,
@@ -26,23 +30,38 @@ export async function generateAndSaveAudio(
             };
         }
 
+        // If audio exists but was generated with a different language, clear it
+        if (existingStory?.audioUrl && cachedLang !== requestedLang) {
+            console.log(`Audio language mismatch: cached=${cachedLang}, requested=${requestedLang}. Regenerating...`);
+            await prisma.story.update({
+                where: { id: storyId },
+                data: {
+                    audioUrl: null,
+                    audioAlignment: [],
+                    audioLanguage: null,
+                } as any
+            });
+        }
+
         // Generate new audio
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
         const response = await axios.post(`${apiUrl}/generate-audio`, {
             text,
-            storyType
+            storyType,
+            language
         });
 
         if (!response.data.audioUrl) {
             throw new Error("No audio URL returned");
         }
 
-        // Save audio to database
+        // Save audio to database (including language used)
         await prisma.story.update({
             where: { id: storyId },
             data: {
                 audioUrl: response.data.audioUrl,
-                audioAlignment: response.data.alignment || []
+                audioAlignment: response.data.alignment || [],
+                audioLanguage: requestedLang,
             } as any
         });
 

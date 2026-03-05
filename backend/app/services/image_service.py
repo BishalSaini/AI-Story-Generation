@@ -41,7 +41,7 @@ async def generate_image(prompt: str, negative_prompt: str = "", retry_count: in
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=90.0  # Image generation can take time
+                timeout=45.0  # Reduced timeout for faster failure
             )
             
             if response.status_code == 404:
