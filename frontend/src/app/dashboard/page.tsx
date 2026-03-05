@@ -542,16 +542,16 @@ export default function Dashboard() {
     const renderFormattedText = (text: string) => {
         if (!text) return null;
         return text.split('\n').map((line, i) => {
-            // Handle double newlines as paragraph breaks
-            if (!line.trim()) return <br key={`br-${i}`} className="block h-4" />;
+            // Handle double newlines as narrow paragraph breaks for book style
+            if (!line.trim()) return <div key={`spacer-${i}`} className="h-4" aria-hidden="true" />;
 
             // Bold parser for **text**
             const parts = line.split(/(\*\*.*?\*\*)/g);
             return (
-                <p key={i} className="mb-4 text-gray-300 leading-relaxed">
+                <p key={i} className="mb-6 text-gray-200 leading-[1.7] font-outfit indent-6 text-left tracking-tight selection:bg-orange-500/30 text-lg">
                     {parts.map((part, j) => {
                         if (part.startsWith('**') && part.endsWith('**')) {
-                            return <strong key={j} className="text-white font-bold">{part.slice(2, -2)}</strong>;
+                            return <strong key={j} className="text-white font-bold tracking-tight">{part.slice(2, -2)}</strong>;
                         }
                         return part;
                     })}
@@ -701,8 +701,9 @@ export default function Dashboard() {
                         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
                             <div className="max-w-4xl mx-auto pb-20">
 
-                                <div className="p-8 rounded-2xl bg-[#15151a] border border-white/5 shadow-2xl relative overflow-hidden">
-                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 to-red-600 shadow-[0_0_15px_rgba(249,115,22,0.3)]" />
+                                <div className="p-10 md:p-16 rounded-3xl bg-[#121217] border border-white/5 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] relative overflow-hidden ring-1 ring-white/5">
+                                    <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 via-orange-500 to-red-600 opacity-60" />
+                                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(249,115,22,0.03),transparent_50%)] pointer-events-none" />
 
                                     {/* Images */}
                                     {result.images && result.images.length > 0 && (
@@ -852,35 +853,49 @@ export default function Dashboard() {
                                     {/* Story Content */}
                                     <div
                                         ref={storyContainerRef}
-                                        className="prose prose-invert prose-lg max-w-none leading-relaxed whitespace-pre-wrap select-none scroll-mt-24"
+                                        className="font-outfit leading-[1.8] text-left scroll-mt-24 space-y-0"
                                     >
                                         {alignment.length > 0 ? (
-                                            alignment.map((item, index) => {
-                                                if (item.type === 'paragraph_break') return <span key={index} className="block h-8" aria-hidden="true" />;
-                                                if (item.type === 'line_break') return <span key={index} className="block h-4" aria-hidden="true" />;
-                                                if (item.type === 'space') return <span key={index}>{item.text}</span>;
+                                            (() => {
+                                                // Group into paragraphs for book styling
+                                                let currentParagraph: any[] = [];
+                                                const paragraphs: any[][] = [];
 
-                                                const isSentenceActive = highlightedSentenceIndex === -1 || item.sentenceIdx === highlightedSentenceIndex;
-                                                const isWordActive = index === highlightedWordIndex;
+                                                alignment.forEach((item) => {
+                                                    if (item.type === 'paragraph_break') {
+                                                        if (currentParagraph.length > 0) paragraphs.push(currentParagraph);
+                                                        currentParagraph = [];
+                                                    } else {
+                                                        currentParagraph.push(item);
+                                                    }
+                                                });
+                                                if (currentParagraph.length > 0) paragraphs.push(currentParagraph);
 
-                                                // Clean up stars if they accidentally leaked into the alignment text
-                                                const cleanDisplayWord = item.text.replace(/\*/g, '');
+                                                return paragraphs.map((paraItems, pIdx) => (
+                                                    <p key={pIdx} className="mb-6 indent-6 text-gray-100 text-lg md:text-xl">
+                                                        {paraItems.map((item, index) => {
+                                                            if (item.type === 'line_break') return <br key={index} />;
+                                                            if (item.type === 'space') return <span key={index}>{item.text}</span>;
 
-                                                return (
-                                                    <span
-                                                        key={index}
-                                                        id={`word-${index}`}
-                                                        className={`transition-all duration-300 inline text-lg
-                                                            ${isWordActive ? 'text-orange-400 font-bold scale-110 shadow-orange-500/20' : isSentenceActive ? 'text-gray-100' : 'text-gray-600'}
-                                                            ${isWordActive ? 'underline underline-offset-4' : ''}
-                                                            ${item.text.includes('**') ? 'font-bold' : ''}
-                                                        `}
-                                                    >
-                                                        {cleanDisplayWord}
-                                                    </span>
-                                                );
+                                                            const isSentenceActive = highlightedSentenceIndex === -1 || item.sentenceIdx === highlightedSentenceIndex;
+                                                            const isWordActive = (alignment.indexOf(paraItems[0]) + index) === highlightedWordIndex;
 
-                                            })
+                                                            return (
+                                                                <span
+                                                                    key={index}
+                                                                    id={`word-${alignment.indexOf(paraItems[0]) + index}`}
+                                                                    className={`transition-all duration-300 inline
+                                                                        ${isWordActive ? 'text-orange-400 font-bold drop-shadow-[0_0_8px_rgba(249,115,22,0.4)]' : isSentenceActive ? 'text-gray-100' : 'text-gray-500'}
+                                                                        ${item.text.includes('**') ? 'font-bold' : ''}
+                                                                    `}
+                                                                >
+                                                                    {item.text.replace(/\*/g, '')}
+                                                                </span>
+                                                            );
+                                                        })}
+                                                    </p>
+                                                ));
+                                            })()
                                         ) : (
                                             <div className="text-gray-300">
                                                 {renderFormattedText(result.story.story_content)}
@@ -888,8 +903,8 @@ export default function Dashboard() {
                                         )}
                                     </div>
 
-                                    {/* Timeline */}
-                                    {result.story.timeline && (
+                                    {/* Timeline - Only for factual story types */}
+                                    {result.story.timeline && result.story.timeline.length > 0 && ['Historical', 'Hybrid', 'AltHistory'].includes(storyType) && (
                                         <div className="mt-12 pt-8 border-t border-white/10">
                                             <h3 className="font-bold text-lg text-white mb-6 flex items-center gap-2">
                                                 <History size={18} className="text-orange-500" /> Timeline of Events

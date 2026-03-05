@@ -52,6 +52,8 @@ export async function generateAndSaveStory(
             storyType,
             withImages,
             language,
+        }, {
+            timeout: 180000 // 3 minutes timeout
         });
 
         // 4. Save to Database (Prisma Frontend)
@@ -116,6 +118,8 @@ export async function generateAudio(text: string, storyType: string, language: s
             text,
             storyType,
             language
+        }, {
+            timeout: 120000 // 2 minutes timeout for audio generation
         });
 
         return {
